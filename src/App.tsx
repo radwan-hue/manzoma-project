@@ -1855,19 +1855,37 @@ function App() {
     const prefix = `RIG-${currentYear}-`;
     const firebaseUrl = 'https://rig-system-af597-default-rtdb.firebaseio.com/';
 
+    console.log('=== handleNewComplaint START ===');
+    console.log('Form Data:', formData);
+    console.log('Current Year:', currentYear, 'Prefix:', prefix);
+
     try {
       // 1. Fetch all complaints from the database
+      console.log('📡 Attempting to fetch complaints from Firebase...');
+      console.log('Fetch URL:', `${firebaseUrl}complaints.json`);
+      
       const response = await fetch(`${firebaseUrl}complaints.json`);
+      console.log('📊 Firebase Response Status:', response.status, response.statusText);
+      
       let allComplaints: Complaint[] = [];
       
       if (response.ok) {
         const cloudData = await response.json();
+        console.log('☁️ Cloud Data Retrieved:', cloudData);
         if (cloudData) {
           allComplaints = Object.values(cloudData);
+          console.log('☁️ Parsed Cloud Complaints Count:', allComplaints.length);
         }
+      } else {
+        console.warn('⚠️ Firebase Response not OK. Status:', response.status);
+        console.warn('⚠️ This might indicate Firebase Rules are blocking reads');
+        const errorText = await response.text();
+        console.error('⚠️ Firebase Error Response:', errorText);
       }
 
       // 2. Merge with local complaints to get complete list
+      console.log('💾 Local Complaints Count:', complaints.length);
+      
       const localComplaints = complaints || [];
       const allExistingIds = new Set<string>();
       const allComplaintsList: Complaint[] = [];
@@ -1879,20 +1897,35 @@ function App() {
         }
       });
 
+      console.log('🔗 Total Unique Complaints After Merge:', allComplaintsList.length);
+      console.log('📋 All Existing IDs:', Array.from(allExistingIds));
+
       // 3. Extract sequence numbers from IDs matching the current year
+      console.log('🔍 Extracting sequence numbers for prefix:', prefix);
+      
       const sequenceNumbers: number[] = allComplaintsList
         .map(c => {
           const pattern = new RegExp(`^${prefix}(\\d+)$`);
           const match = c.id.match(pattern);
-          return match ? parseInt(match[1], 10) : 0;
+          const seq = match ? parseInt(match[1], 10) : 0;
+          if (seq > 0) {
+            console.log(`  ✓ ID: ${c.id} → Sequence: ${seq}`);
+          }
+          return seq;
         })
         .filter(num => num > 0);
+
+      console.log('📊 Extracted Sequence Numbers:', sequenceNumbers);
 
       // 4. Find the maximum sequence number and increment
       const maxSeq = sequenceNumbers.length > 0 ? Math.max(...sequenceNumbers) : 0;
       const nextSeq = maxSeq + 1;
 
+      console.log('📈 Max Sequence:', maxSeq, '→ Next Sequence:', nextSeq);
+
       const generatedId = `${prefix}${nextSeq.toString().padStart(5, '0')}`;
+      console.log('✅ Generated ID:', generatedId);
+
       const newComplaint: Complaint = {
         ...formData,
         id: generatedId,
@@ -1900,24 +1933,66 @@ function App() {
         createdAt: new Date().toISOString()
       };
 
-      // 5. Save complaint locally
-      saveComplaints([newComplaint, ...complaints]);
+      console.log('📝 New Complaint Object:', newComplaint);
 
-      // 6. Push to cloud database
-      try {
-        await fetch(`${firebaseUrl}complaints.json`, {
-          method: 'POST',
-          body: JSON.stringify(newComplaint)
-        });
-        console.log("Pushed to cloud successfully");
-      } catch (err) {
-        console.error("Failed to push to cloud:", err);
+      // Validate complaint data
+      if (!newComplaint.name || !newComplaint.email || !newComplaint.phone) {
+        console.error('❌ VALIDATION ERROR: Missing required fields');
+        console.error('  - name:', newComplaint.name);
+        console.error('  - email:', newComplaint.email);
+        console.error('  - phone:', newComplaint.phone);
+        toast.error('خطأ: بيانات ناقصة (الاسم، البريد، أو الهاتف)');
+        return '';
       }
 
+      // 5. Save complaint locally
+      console.log('💾 Saving complaint to local storage...');
+      saveComplaints([newComplaint, ...complaints]);
+      console.log('✅ Local save successful');
+
+      // 6. Push to cloud database
+      console.log('🌐 Pushing complaint to Firebase...');
+      console.log('Push URL:', `${firebaseUrl}complaints.json`);
+      
+      try {
+        const pushResponse = await fetch(`${firebaseUrl}complaints.json`, {
+          method: 'POST',
+          body: JSON.stringify(newComplaint),
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log('📤 Firebase Push Response Status:', pushResponse.status, pushResponse.statusText);
+        
+        if (pushResponse.ok) {
+          const pushData = await pushResponse.json();
+          console.log('✅ Firebase Push Successful:', pushData);
+        } else {
+          const errorText = await pushResponse.text();
+          console.error('❌ Firebase Push Failed. Status:', pushResponse.status);
+          console.error('❌ Firebase Error Response:', errorText);
+          console.warn('⚠️ Complaint saved locally, but cloud push failed');
+          console.warn('⚠️ This might indicate Firebase Rules are blocking writes');
+        }
+      } catch (pushErr) {
+        console.error('❌ Cloud Push Network Error:', pushErr);
+        console.warn('⚠️ Complaint saved locally, but cloud push failed (network error)');
+      }
+
+      console.log('=== handleNewComplaint SUCCESS ===');
+      console.log('Returning ID:', generatedId);
       return generatedId;
     } catch (error) {
-      console.error("Error in handleNewComplaint:", error);
-      toast.error('حدث خطأ في معالجة الشكوى. يرجى المحاولة مرة أخرى.');
+      console.error('❌ =================================');
+      console.error('❌ ERROR in handleNewComplaint');
+      console.error('❌ Error Type:', error instanceof Error ? error.constructor.name : typeof error);
+      console.error('❌ Error Message:', error instanceof Error ? error.message : String(error));
+      console.error('❌ Error Stack:', error instanceof Error ? error.stack : 'No stack trace');
+      console.error('❌ Full Error Object:', error);
+      console.error('❌ =================================');
+      
+      toast.error('حدث خطأ في معالجة الشكوى. تحقق من وحدة التحكم للمزيد من التفاصيل.');
       return '';
     }
   };
