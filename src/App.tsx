@@ -327,10 +327,25 @@ const ComplaintForm = ({ onNewComplaint }: { onNewComplaint: (data: any) => Prom
   };
 
   const onSubmit = async (data: any) => {
-    await new Promise(resolve => setTimeout(resolve, 1200));
-    const generatedId = await onNewComplaint({ ...data, userType, attachments });
-    setRefNumber(generatedId);
-    setSubmitted(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      const generatedId = await onNewComplaint({ ...data, userType, attachments });
+      
+      // Validate that ID was generated successfully
+      if (!generatedId || generatedId.trim() === '') {
+        toast.error('فشل توليد رقم المرجعية. يرجى المحاولة مرة أخرى.');
+        return;
+      }
+      
+      setRefNumber(generatedId);
+      setSubmitted(true);
+      
+      // Log for debugging
+      console.log('Complaint submitted successfully with ID:', generatedId);
+    } catch (error) {
+      console.error('Error submitting complaint:', error);
+      toast.error('حدث خطأ أثناء إرسال الشكوى. يرجى المحاولة مرة أخرى.');
+    }
   };
 
   const handleReset = () => {
@@ -355,7 +370,11 @@ const ComplaintForm = ({ onNewComplaint }: { onNewComplaint: (data: any) => Prom
           </p>
           <div className="bg-gray-50 p-4 rounded-lg mb-8">
             <p className="text-sm text-gray-500 mb-1">رقم المرجعية الخاص بك:</p>
-            <p className="text-2xl font-mono font-bold text-blue-600 tracking-wider">{refNumber}</p>
+            {refNumber ? (
+              <p className="text-2xl font-mono font-bold text-blue-600 tracking-wider">{refNumber}</p>
+            ) : (
+              <p className="text-sm text-red-600">⚠️ لم يتم توليد رقم المرجعية. يرجى التحقق من البريد الإلكتروني أو الاتصال بنا.</p>
+            )}
           </div>
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
             <button className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
