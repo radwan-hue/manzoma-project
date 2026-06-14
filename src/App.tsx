@@ -1890,7 +1890,23 @@ function App() {
       const allExistingIds = new Set<string>();
       const allComplaintsList: Complaint[] = [];
       
-      [...allComplaints, ...localComplaints].forEach(c => {
+      [...allComplaints, ...localComplaints].forEach((c, index) => {
+        // 🛡️ Safety check: Ensure complaint object and ID exist
+        if (!c) {
+          console.warn('⚠️ SAFETY CHECK: Null/undefined complaint at index:', index);
+          return;
+        }
+
+        if (!c.id) {
+          console.warn('⚠️ SAFETY CHECK: Complaint at index', index, 'has no ID:', c);
+          return;
+        }
+
+        if (typeof c.id !== 'string') {
+          console.warn('⚠️ SAFETY CHECK: Complaint ID is not a string at index', index, '- Type:', typeof c.id);
+          return;
+        }
+
         if (!allExistingIds.has(c.id)) {
           allExistingIds.add(c.id);
           allComplaintsList.push(c);
@@ -1905,11 +1921,25 @@ function App() {
       
       const sequenceNumbers: number[] = allComplaintsList
         .map(c => {
+          // 🛡️ Safety check: Ensure ID exists before calling .match()
+          if (!c || !c.id) {
+            console.warn('⚠️ SAFETY CHECK: Complaint object missing ID or is invalid:', c);
+            return 0;
+          }
+
+          // Validate ID is a string
+          if (typeof c.id !== 'string') {
+            console.warn('⚠️ SAFETY CHECK: ID is not a string, type:', typeof c.id, 'Value:', c.id);
+            return 0;
+          }
+
           const pattern = new RegExp(`^${prefix}(\\d+)$`);
           const match = c.id.match(pattern);
           const seq = match ? parseInt(match[1], 10) : 0;
           if (seq > 0) {
             console.log(`  ✓ ID: ${c.id} → Sequence: ${seq}`);
+          } else if (c.id) {
+            console.log(`  ⊘ ID: ${c.id} → Does not match prefix (skipped)`);
           }
           return seq;
         })
